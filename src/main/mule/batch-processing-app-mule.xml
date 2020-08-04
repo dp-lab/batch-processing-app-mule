@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="1fa703e4-47a8-4a42-89c0-da5b43be3d54" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<flow name="batch-processing-app-muleFlow" doc:id="2d667010-da7b-4fe1-81d8-85362ef2a427" >
+		<http:listener doc:name="Listener" doc:id="0a4eb090-38da-4a03-99ce-c9a603412652" config-ref="HTTP_Listener_config" path="/batch"/>
+		<logger level="INFO" doc:name="Logger" doc:id="f904adb4-0ade-4a8b-90f5-8d3b55325e7b" message="#[payload]"/>
+		<ee:transform doc:name="Transform Message" doc:id="68f18bda-6fc2-4bd9-b21c-785a0d1f7cb4">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<batch:job jobName="batch-processing-app-muleBatch_Job" doc:id="3b897d31-6335-426b-80ad-e74c988ad78a" maxFailedRecords="100" blockSize="2">
+			<batch:process-records >
+				<batch:step name="Batch_Step_1" doc:id="c99d1b72-ea51-422e-bc18-ca9caa5c5859" acceptExpression="#[ (payload.id mod 2) == 0 ]">
+					<choice doc:name="Choice" doc:id="894495a9-0b83-4d6b-8acb-92a478252ee1" >
+						<when expression="#[payload.id &gt; 111111]">
+							<raise-error doc:name="Raise error" doc:id="a5ffb6f0-55b5-4252-8239-391f0da02fa0" type="ORDER:INVALID_DATA" description="Name is invalid. Cannot complete transaction"/>
+						</when>
+						<otherwise >
+							<logger level="INFO" doc:name="Logger" doc:id="e34b1229-f75b-411d-a054-866f8f521e79" message="***************************************************************Successful Payload*************************************************************** #[payload]" />
+						</otherwise>
+					</choice>
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="8f0facbf-7bcd-429f-adc3-bc5ca0815e0f" size="2">
+						<logger level="INFO" doc:name="Logger" doc:id="e8692192-3d00-4adc-a825-8464d326fd20" message="***************************************************************Aggregated Payload In Step 1 *************************************************************** #[payload]"/>
+					</batch:aggregator>
+				</batch:step>
+				<batch:step name="Batch_Step_2" doc:id="b45d6304-a412-440b-a61b-9e889efd67b8" acceptPolicy="ONLY_FAILURES">
+					<logger level="INFO" doc:name="Logger" doc:id="f86ad267-984c-4939-a9af-e195625853d0" message="***************************************************************Failed Payload*************************************************************** #[payload]"/>
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="3b49829f-1b25-405f-8117-adb81e06ff6b" size="2">
+						<logger level="INFO" doc:name="Logger" doc:id="ab8797ff-7e9b-4b45-a466-7396136fd441" message="***************************************************************Aggregated Payload In Step 2 *************************************************************** #[payload]"/>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<ee:transform doc:name="Transform Message" doc:id="d8063153-cb85-4439-9edc-e524cbe0b094" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="c8c9e811-827b-4954-9a24-ef36d6d76087" message="*************************************************************** Batch Processing Completed  *************************************************************** #[payload]"/>
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+</mule>
